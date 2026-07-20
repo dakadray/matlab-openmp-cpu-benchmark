@@ -6,6 +6,7 @@ function suite = runBenchmarkProfileSuite(varargin)
     parser = inputParser;
     parser.addParameter('Profiles', {'smoke', 'quick', 'standard', 'stress'});
     parser.addParameter('Threads', 'all');
+    parser.addParameter('Repeats', [], @(x) isempty(x) || (isscalar(x) && x >= 1));
     parser.addParameter('SaveTag', 'local_reference', @(x) ischar(x) || isstring(x));
     parser.addParameter('ForceBuild', false, @(x) islogical(x) || isnumeric(x));
     parser.parse(varargin{:});
@@ -27,6 +28,7 @@ function suite = runBenchmarkProfileSuite(varargin)
     fprintf('Local CPU benchmark suite: %s\n', baseTag);
     fprintf('Profiles: %s\n', strjoin(profiles, ', '));
     fprintf('Threads: %s\n', tagValue(parser.Results.Threads));
+    fprintf('Repeats per size: %s\n', tagValueOrDefault(parser.Results.Repeats, 'profile default'));
     fprintf('\n');
 
     suite = struct();
@@ -47,6 +49,7 @@ function suite = runBenchmarkProfileSuite(varargin)
         suite.benchmarks{iProfile} = benchmarkOpenMpCpu( ...
             'Profile', profile, ...
             'Threads', parser.Results.Threads, ...
+            'Repeats', parser.Results.Repeats, ...
             'ForceBuild', logical(parser.Results.ForceBuild) && iProfile == 1, ...
             'SaveTag', [baseTag '_' profile]);
 
@@ -85,7 +88,7 @@ function profiles = normalizeProfiles(value)
     profiles = profiles(~cellfun(@isempty, profiles));
     profiles = unique(profiles, 'stable');
 
-    validProfiles = {'smoke', 'quick', 'standard', 'stress'};
+    validProfiles = {'smoke', 'quick', 'standard', 'stress', 'crazy'};
     invalidMask = ~ismember(profiles, validProfiles);
     if any(invalidMask)
         error('cpuBench:invalidProfiles', 'Unsupported profile(s): %s', ...
@@ -110,5 +113,13 @@ function out = tagValue(value)
         out = sprintf('%g', value);
     else
         out = char(value);
+    end
+end
+
+function out = tagValueOrDefault(value, defaultText)
+    if isempty(value)
+        out = defaultText;
+    else
+        out = tagValue(value);
     end
 end

@@ -37,19 +37,33 @@ mex -setup C++
 
 ## 一键运行
 
-在 MATLAB 当前目录切到本项目根目录，然后运行：
+在 MATLAB 当前目录切到本项目根目录，然后按机器选择入口。
+
+本地 Y9000P 跑常规组，不跑 `crazy`：
 
 ```matlab
-runCpuBenchmark
+runCpuBenchmark_Y9000P
 ```
 
-这个脚本会依次运行：
+32 GB 租用服务器跑全部组，包括 32 GB-oriented `crazy`：
+
+```matlab
+runCpuBenchmark_Server
+```
+
+Y9000P 入口会依次运行：
 
 ```text
 smoke, quick, standard, stress
 ```
 
-`runLocalReferenceBenchmark` 目前保留为兼容旧命令的别名，内部直接调用 `runCpuBenchmark`。
+Server 入口会依次运行：
+
+```text
+smoke, quick, standard, stress, crazy
+```
+
+两个入口都固定每个规模重复 3 次。`runCpuBenchmark` 目前是本地安全默认入口，内部调用 `runCpuBenchmark_Y9000P`。
 
 或直接指定：
 
@@ -73,13 +87,15 @@ results/*.mat
 
 最重要的列：
 
-- `medianStiffnessSeconds`: C++ MEX 刚度矩阵计算 + 稀疏装配总时间。
-- `medianElementSeconds`: C++ OpenMP 单元刚度矩阵计算和 triplet 写入时间。
-- `medianSortSeconds`: C++ 稀疏装配前的 triplet 排序时间。
-- `medianSolveSeconds`: MATLAB `Kff \ Ff` 解方程时间。
-- `medianTotalSeconds`: 刚度矩阵阶段 + 约束切片 + 解方程阶段。
+- `meanStiffnessSeconds`: C++ MEX 刚度矩阵计算 + 稀疏装配平均时间。
+- `meanElementSeconds`: C++ OpenMP 单元刚度矩阵计算和 triplet 写入平均时间。
+- `meanSortSeconds`: C++ 稀疏装配前的 triplet 排序平均时间。
+- `meanSolveSeconds`: MATLAB `Kff \ Ff` 解方程平均时间。
+- `meanTotalSeconds`: 刚度矩阵阶段 + 约束切片 + 解方程阶段平均时间。
 - `actualMexThreads`: MEX 实际 OpenMP 并行区线程数。
-- `medianRelativeResidual`: 解方程相对残差，正常应在 `1e-8` 以下。
+- `meanRelativeResidual`: 解方程平均相对残差，正常应在 `1e-8` 以下。
+
+CSV 中仍保留 `median*` 列，方便以后排查异常波动；默认购买决策先看 `mean*`。
 
 ## 规模选择
 
@@ -106,6 +122,18 @@ benchmarkOpenMpCpu('Profile', 'standard', 'Threads', 'all')
 
 `40 x 40 x 40` 会明显考验内存、散热和 MATLAB 稀疏直接求解性能，建议在三台候选 CPU 上都使用相同电源策略和相同 MATLAB 版本。
 
+`crazy` profile 面向 32 GB 租用服务器，进一步拉高内存和求解器压力：
+
+| 网格规模 | 单元数 | 全局自由度 | 求解自由度 | C++ 原始 triplet 数 |
+|---:|---:|---:|---:|---:|
+| `42 x 42 x 42` | 74,088 | 238,521 | 232,974 | 42,674,688 |
+| `44 x 44 x 44` | 85,184 | 273,375 | 267,300 | 49,065,984 |
+| `46 x 46 x 46` | 97,336 | 311,469 | 304,842 | 56,065,536 |
+| `48 x 48 x 48` | 110,592 | 352,947 | 345,744 | 63,700,992 |
+| `50 x 50 x 50` | 125,000 | 397,953 | 390,150 | 72,000,000 |
+
+`crazy` 默认只在 `runCpuBenchmark_Server` 中启用。
+
 可选 profile:
 
 ```matlab
@@ -113,6 +141,7 @@ benchmarkOpenMpCpu('Profile', 'smoke', 'Threads', 'all')    % 编译和冒烟测
 benchmarkOpenMpCpu('Profile', 'quick', 'Threads', 'all')    % 较快比较
 benchmarkOpenMpCpu('Profile', 'standard', 'Threads', 'all') % 推荐正式比较
 benchmarkOpenMpCpu('Profile', 'stress', 'Threads', 'all')   % 更重，注意内存
+benchmarkOpenMpCpu('Profile', 'crazy', 'Threads', 'all')    % 32 GB 服务器压测
 ```
 
 也可以手动指定规模：
@@ -127,17 +156,16 @@ bench = benchmarkOpenMpCpu( ...
 
 ## 三台机器怎么比较
 
-在每台机器上运行相同命令。建议用 `SaveTag` 标注 CPU：
+本地机器运行：
 
 ```matlab
-benchmarkOpenMpCpu('Profile', 'standard', 'Threads', 'all', 'SaveTag', '12900k')
-benchmarkOpenMpCpu('Profile', 'stress', 'Threads', 'all', 'SaveTag', '12900k')
+runCpuBenchmark_Y9000P
+```
 
-benchmarkOpenMpCpu('Profile', 'standard', 'Threads', 'all', 'SaveTag', 'u9_285k')
-benchmarkOpenMpCpu('Profile', 'stress', 'Threads', 'all', 'SaveTag', 'u9_285k')
+32 GB 租用服务器运行：
 
-benchmarkOpenMpCpu('Profile', 'standard', 'Threads', 'all', 'SaveTag', '9950x')
-benchmarkOpenMpCpu('Profile', 'stress', 'Threads', 'all', 'SaveTag', '9950x')
+```matlab
+runCpuBenchmark_Server
 ```
 
 把三台机器的 `results/*_summary.csv` 放到同一个 `results` 目录后运行：
@@ -158,13 +186,13 @@ compareCpuBenchmarkResults
 如果这个仓库发布为公开 GitHub 仓库，远程机器不需要登录 GitHub，直接：
 
 ```bash
-git clone https://github.com/<your-name>/<repo-name>.git
+git clone https://github.com/dakadray/matlab-openmp-cpu-benchmark.git
 ```
 
 然后在 MATLAB 里进入仓库目录运行：
 
 ```matlab
-runCpuBenchmark
+runCpuBenchmark_Server
 ```
 
 ## 说明

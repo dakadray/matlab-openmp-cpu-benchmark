@@ -105,11 +105,14 @@ function bench = benchmarkOpenMpCpu(varargin)
             rows(rowIndex).constraintSeconds = constraintSeconds;
             rows(rowIndex).solveSeconds = solveSeconds;
             rows(rowIndex).residualSeconds = residualSeconds;
+            rows(rowIndex).totalSeconds = rows(rowIndex).stiffnessSeconds + ...
+                constraintSeconds + solveSeconds;
             rows(rowIndex).relativeResidual = relativeResidual;
             rows(rowIndex).rawTriplets = mexProfile.rawTriplets;
             rows(rowIndex).uniqueNonzeros = mexProfile.uniqueNonzeros;
-            fprintf('K %.3fs, solve %.3fs, residual %.2e\n', ...
-                rows(rowIndex).stiffnessSeconds, solveSeconds, relativeResidual);
+            fprintf('K %.3fs, solve %.3fs, total %.3fs, residual %.2e\n', ...
+                rows(rowIndex).stiffnessSeconds, solveSeconds, ...
+                rows(rowIndex).totalSeconds, relativeResidual);
 
             clear K F Kff Ff Ufree;
         end
@@ -137,10 +140,10 @@ function bench = benchmarkOpenMpCpu(varargin)
     writetable(summary, csvSummary);
     save(matFile, 'bench');
 
-    fprintf('\nSummary by median time:\n');
+    fprintf('\nSummary by mean time:\n');
     disp(summary(:, {'nx', 'ny', 'nz', 'dofs', 'resolvedThreads', ...
-        'actualMexThreads', 'medianStiffnessSeconds', 'medianSolveSeconds', ...
-        'medianTotalSeconds', 'medianRelativeResidual'}));
+        'actualMexThreads', 'meanStiffnessSeconds', 'meanSolveSeconds', ...
+        'meanTotalSeconds', 'meanRelativeResidual'}));
     fprintf('Saved:\n  %s\n  %s\n  %s\n', csvDetail, csvSummary, matFile);
 end
 
@@ -154,6 +157,8 @@ function sizes = defaultSizes(profile)
             sizes = [8 8 8; 12 12 12; 16 16 16; 20 20 20];
         case 'stress'
             sizes = [25 25 25; 30 30 30; 35 35 35; 40 40 40];
+        case 'crazy'
+            sizes = [42 42 42; 44 44 44; 46 46 46; 48 48 48; 50 50 50];
         otherwise
             error('cpuBench:unknownProfile', 'Unknown profile: %s', char(profile));
     end
@@ -161,14 +166,8 @@ end
 
 function repeats = defaultRepeats(profile)
     switch lower(strtrim(char(profile)))
-        case 'smoke'
-            repeats = 1;
-        case 'quick'
-            repeats = 2;
-        case 'standard'
+        case {'smoke', 'quick', 'standard', 'stress', 'crazy'}
             repeats = 3;
-        case 'stress'
-            repeats = 2;
         otherwise
             repeats = 3;
     end
@@ -198,13 +197,19 @@ function summary = summarizeRows(detail)
     summary.nnzK = splitapply(@median, detail.nnzK, groups);
     summary.resolvedThreads = splitapply(@median, detail.resolvedThreads, groups);
     summary.actualMexThreads = splitapply(@median, detail.actualMexThreads, groups);
+    summary.meanStiffnessSeconds = splitapply(@mean, detail.stiffnessSeconds, groups);
+    summary.meanElementSeconds = splitapply(@mean, detail.elementSeconds, groups);
+    summary.meanSortSeconds = splitapply(@mean, detail.sortSeconds, groups);
+    summary.meanSolveSeconds = splitapply(@mean, detail.solveSeconds, groups);
+    summary.meanConstraintSeconds = splitapply(@mean, detail.constraintSeconds, groups);
+    summary.meanTotalSeconds = splitapply(@mean, detail.totalSeconds, groups);
+    summary.meanRelativeResidual = splitapply(@mean, detail.relativeResidual, groups);
     summary.medianStiffnessSeconds = splitapply(@median, detail.stiffnessSeconds, groups);
     summary.medianElementSeconds = splitapply(@median, detail.elementSeconds, groups);
     summary.medianSortSeconds = splitapply(@median, detail.sortSeconds, groups);
     summary.medianSolveSeconds = splitapply(@median, detail.solveSeconds, groups);
     summary.medianConstraintSeconds = splitapply(@median, detail.constraintSeconds, groups);
-    summary.medianTotalSeconds = splitapply(@median, ...
-        detail.stiffnessSeconds + detail.constraintSeconds + detail.solveSeconds, groups);
+    summary.medianTotalSeconds = splitapply(@median, detail.totalSeconds, groups);
     summary.medianRelativeResidual = splitapply(@median, detail.relativeResidual, groups);
 end
 

@@ -1,8 +1,5 @@
-% runCpuBenchmark Main entry point for local or rented CPU benchmark runs.
+% runCpuBenchmark Local-safe default entry point.
 %
-% This runs smoke, quick, standard, and stress with all detected threads.
+% For rented 32 GB servers, run runCpuBenchmark_Server instead.
 
-suite = runBenchmarkProfileSuite( ...
-    'Threads', 'all', ...
-    'SaveTag', 'cpu_benchmark', ...
-    'ForceBuild', false);
+runCpuBenchmark_Y9000P;

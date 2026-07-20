@@ -22,16 +22,27 @@ function comparison = compareCpuBenchmarkResults(resultFiles)
     end
 
     allRows = vertcat(tables{:});
-    metric = allRows.medianStiffnessSeconds + allRows.medianSolveSeconds;
-    allRows.medianAssemblySolveSeconds = metric;
+    hasMean = all(ismember({'meanStiffnessSeconds', 'meanSolveSeconds'}, ...
+        allRows.Properties.VariableNames));
+    if hasMean
+        metricName = 'meanAssemblySolveSeconds';
+        allRows.meanAssemblySolveSeconds = ...
+            allRows.meanStiffnessSeconds + allRows.meanSolveSeconds;
+        stiffnessName = 'meanStiffnessSeconds';
+        solveName = 'meanSolveSeconds';
+    else
+        metricName = 'medianAssemblySolveSeconds';
+        allRows.medianAssemblySolveSeconds = ...
+            allRows.medianStiffnessSeconds + allRows.medianSolveSeconds;
+        stiffnessName = 'medianStiffnessSeconds';
+        solveName = 'medianSolveSeconds';
+    end
 
-    [groups, nx, ny, nz] = findgroups(allRows.nx, allRows.ny, allRows.nz);
-    best = splitapply(@min, allRows.medianAssemblySolveSeconds, groups);
-    allRows.speedupVsBestSameSize = best(groups) ./ allRows.medianAssemblySolveSeconds;
+    [groups, ~, ~, ~] = findgroups(allRows.nx, allRows.ny, allRows.nz);
+    best = splitapply(@min, allRows.(metricName), groups);
+    allRows.speedupVsBestSameSize = best(groups) ./ allRows.(metricName);
 
-    comparison = sortrows(allRows, {'nx', 'ny', 'nz', 'medianAssemblySolveSeconds'});
+    comparison = sortrows(allRows, {'nx', 'ny', 'nz', metricName});
     disp(comparison(:, {'resultFile', 'nx', 'ny', 'nz', 'dofs', ...
-        'medianStiffnessSeconds', 'medianSolveSeconds', ...
-        'medianAssemblySolveSeconds', 'speedupVsBestSameSize'}));
+        stiffnessName, solveName, metricName, 'speedupVsBestSameSize'}));
 end
-
