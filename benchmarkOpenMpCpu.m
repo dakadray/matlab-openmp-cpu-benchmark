@@ -151,9 +151,10 @@ function sizes = defaultSizes(profile)
         case 'quick'
             sizes = [6 6 6; 8 8 8; 10 10 10];
         case 'standard'
-            sizes = [8 8 8; 12 12 12; 16 16 16; 20 20 20];
+            sizes = [8 8 8; 12 12 12; 16 16 16; 20 20 20; ...
+                25 25 25; 30 30 30; 35 35 35; 40 40 40];
         case 'stress'
-            sizes = [12 12 12; 16 16 16; 20 20 20; 24 24 24; 28 28 28];
+            sizes = [20 20 20; 25 25 25; 30 30 30; 35 35 35; 40 40 40];
         otherwise
             error('cpuBench:unknownProfile', 'Unknown profile: %s', char(profile));
     end
@@ -233,4 +234,3 @@ function out = stringValue(value)
         out = char(value);
     end
 end
-
