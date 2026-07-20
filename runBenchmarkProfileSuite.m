@@ -1,11 +1,10 @@
 function suite = runBenchmarkProfileSuite(varargin)
 % runBenchmarkProfileSuite Run a set of benchmark profiles as one local suite.
 %
-% By default this runs smoke, quick, and standard. The stress profile is
-% intentionally skipped for local reference runs.
+% By default this runs smoke, quick, standard, and stress.
 
     parser = inputParser;
-    parser.addParameter('Profiles', {'smoke', 'quick', 'standard'});
+    parser.addParameter('Profiles', {'smoke', 'quick', 'standard', 'stress'});
     parser.addParameter('Threads', 'all');
     parser.addParameter('SaveTag', 'local_reference', @(x) ischar(x) || isstring(x));
     parser.addParameter('ForceBuild', false, @(x) islogical(x) || isnumeric(x));
@@ -28,7 +27,7 @@ function suite = runBenchmarkProfileSuite(varargin)
     fprintf('Local CPU benchmark suite: %s\n', baseTag);
     fprintf('Profiles: %s\n', strjoin(profiles, ', '));
     fprintf('Threads: %s\n', tagValue(parser.Results.Threads));
-    fprintf('Stress profile: skipped\n\n');
+    fprintf('\n');
 
     suite = struct();
     suite.baseTag = baseTag;
@@ -86,21 +85,14 @@ function profiles = normalizeProfiles(value)
     profiles = profiles(~cellfun(@isempty, profiles));
     profiles = unique(profiles, 'stable');
 
-    stressMask = strcmp(profiles, 'stress');
-    if any(stressMask)
-        warning('cpuBench:stressSkipped', ...
-            'The stress profile was requested but is skipped by this suite.');
-        profiles(stressMask) = [];
-    end
-
-    validProfiles = {'smoke', 'quick', 'standard'};
+    validProfiles = {'smoke', 'quick', 'standard', 'stress'};
     invalidMask = ~ismember(profiles, validProfiles);
     if any(invalidMask)
         error('cpuBench:invalidProfiles', 'Unsupported profile(s): %s', ...
             strjoin(profiles(invalidMask), ', '));
     end
     if isempty(profiles)
-        error('cpuBench:noProfiles', 'No profiles remain after skipping stress.');
+        error('cpuBench:noProfiles', 'No profiles were requested.');
     end
 end
 
