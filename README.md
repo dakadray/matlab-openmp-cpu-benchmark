@@ -43,6 +43,24 @@ mex -setup C++
 runCpuBenchmark
 ```
 
+如果想在本机跑一轮完整本地参照，但不运行 `stress` 那组，运行：
+
+```matlab
+runLocalReferenceBenchmark
+```
+
+这个脚本会依次运行：
+
+```text
+smoke, quick, standard
+```
+
+并且明确跳过：
+
+```text
+stress
+```
+
 或直接指定：
 
 ```matlab
