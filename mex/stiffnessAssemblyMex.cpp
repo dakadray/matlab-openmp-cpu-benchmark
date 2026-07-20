@@ -10,6 +10,11 @@
 #include <thread>
 #include <vector>
 
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#endif
+
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -85,6 +90,214 @@ mxArray* makeThreadStatus()
     mxSetField(s, 0, "hardwareConcurrency", mxCreateDoubleScalar(hardwareConcurrency()));
     return s;
 }
+
+#ifdef _WIN32
+struct CpuSetRecord {
+    DWORD id;
+    WORD group;
+    BYTE logicalProcessorIndex;
+    BYTE efficiencyClass;
+    bool parked;
+};
+
+std::vector<CpuSetRecord> queryWindowsCpuSets()
+{
+    DWORD bytesNeeded = 0;
+    GetSystemCpuSetInformation(nullptr, 0, &bytesNeeded, GetCurrentProcess(), 0);
+    if (bytesNeeded == 0) {
+        mexErrMsgIdAndTxt("cpuBench:cpuSetsUnavailable",
+            "Windows CPU Set information is unavailable on this system.");
+    }
+
+    std::vector<char> buffer(bytesNeeded);
+    if (!GetSystemCpuSetInformation(
+            reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(buffer.data()),
+            bytesNeeded, &bytesNeeded, GetCurrentProcess(), 0)) {
+        mexErrMsgIdAndTxt("cpuBench:cpuSetsUnavailable",
+            "GetSystemCpuSetInformation failed.");
+    }
+
+    std::vector<CpuSetRecord> records;
+    DWORD offset = 0;
+    while (offset < bytesNeeded) {
+        PSYSTEM_CPU_SET_INFORMATION info =
+            reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(buffer.data() + offset);
+        if (info->Type == CpuSetInformation) {
+            CpuSetRecord rec;
+            rec.id = info->CpuSet.Id;
+            rec.group = info->CpuSet.Group;
+            rec.logicalProcessorIndex = info->CpuSet.LogicalProcessorIndex;
+            rec.efficiencyClass = info->CpuSet.EfficiencyClass;
+            rec.parked = info->CpuSet.Parked != 0;
+            records.push_back(rec);
+        }
+        if (info->Size == 0) {
+            break;
+        }
+        offset += info->Size;
+    }
+
+    if (records.empty()) {
+        mexErrMsgIdAndTxt("cpuBench:cpuSetsUnavailable",
+            "No Windows CPU Set records were returned.");
+    }
+    return records;
+}
+
+mxArray* makeDoubleVector(const std::vector<double>& values)
+{
+    mxArray* out = mxCreateDoubleMatrix(1, values.size(), mxREAL);
+    double* data = mxGetPr(out);
+    for (mwSize i = 0; i < values.size(); ++i) {
+        data[i] = values[i];
+    }
+    return out;
+}
+
+void splitCpuSets(const std::vector<CpuSetRecord>& records,
+    std::vector<DWORD>& allIds, std::vector<DWORD>& pIds,
+    std::vector<double>& logicalProcessors, std::vector<double>& pLogicalProcessors,
+    std::vector<double>& efficiencyClasses, int& minEfficiency, int& maxEfficiency)
+{
+    minEfficiency = 255;
+    maxEfficiency = 0;
+    for (const CpuSetRecord& rec : records) {
+        if (rec.parked) {
+            continue;
+        }
+        const int eff = static_cast<int>(rec.efficiencyClass);
+        minEfficiency = std::min(minEfficiency, eff);
+        maxEfficiency = std::max(maxEfficiency, eff);
+    }
+
+    for (const CpuSetRecord& rec : records) {
+        if (rec.parked) {
+            continue;
+        }
+        allIds.push_back(rec.id);
+        logicalProcessors.push_back(static_cast<double>(rec.logicalProcessorIndex));
+        efficiencyClasses.push_back(static_cast<double>(rec.efficiencyClass));
+        if (static_cast<int>(rec.efficiencyClass) == maxEfficiency) {
+            pIds.push_back(rec.id);
+            pLogicalProcessors.push_back(static_cast<double>(rec.logicalProcessorIndex));
+        }
+    }
+}
+
+DWORD_PTR logicalProcessorMask(const std::vector<double>& logicalProcessors)
+{
+    DWORD_PTR mask = 0;
+    for (double value : logicalProcessors) {
+        const int cpu = static_cast<int>(value);
+        if (cpu < 0 || cpu >= static_cast<int>(sizeof(DWORD_PTR) * 8)) {
+            mexErrMsgIdAndTxt("cpuBench:cpuGroupUnsupported",
+                "CPU affinity mask only supports the first processor group.");
+        }
+        mask |= (static_cast<DWORD_PTR>(1) << cpu);
+    }
+    return mask;
+}
+
+mxArray* setWindowsCpuMode(const std::string& mode)
+{
+    std::vector<CpuSetRecord> records = queryWindowsCpuSets();
+    std::vector<DWORD> allIds;
+    std::vector<DWORD> pIds;
+    std::vector<double> logicalProcessors;
+    std::vector<double> pLogicalProcessors;
+    std::vector<double> efficiencyClasses;
+    int minEfficiency = 0;
+    int maxEfficiency = 0;
+    splitCpuSets(records, allIds, pIds, logicalProcessors, pLogicalProcessors,
+        efficiencyClasses, minEfficiency, maxEfficiency);
+
+    if (allIds.empty()) {
+        mexErrMsgIdAndTxt("cpuBench:noActiveCpuSets", "No active CPU sets were found.");
+    }
+
+    std::vector<DWORD>* selectedIds = &allIds;
+    std::vector<double>* selectedLogical = &logicalProcessors;
+    std::string selectedMode = "all";
+    std::string message = "Using all active logical processors.";
+
+    if (mode == "p" || mode == "pcore" || mode == "pcores") {
+        if (maxEfficiency == minEfficiency || pIds.empty()) {
+            mexErrMsgIdAndTxt("cpuBench:noHybridCpu",
+                "P-core mode requires a Windows hybrid CPU with multiple EfficiencyClass values.");
+        }
+        selectedIds = &pIds;
+        selectedLogical = &pLogicalProcessors;
+        selectedMode = "pcores";
+        message = "Using logical processors with the highest Windows EfficiencyClass.";
+    } else if (!(mode == "all" || mode == "pe" || mode == "amd")) {
+        mexErrMsgIdAndTxt("cpuBench:invalidCpuMode",
+            "CPU mode must be 'pcores', 'all', 'pe', or 'amd'.");
+    }
+
+    HANDLE process = GetCurrentProcess();
+    if (selectedMode == "all") {
+        DWORD_PTR processMask = 0;
+        DWORD_PTR systemMask = 0;
+        if (GetProcessAffinityMask(process, &processMask, &systemMask)) {
+            SetProcessAffinityMask(process, systemMask);
+        }
+        SetProcessDefaultCpuSets(process, nullptr, 0);
+    } else {
+        const DWORD_PTR mask = logicalProcessorMask(*selectedLogical);
+        if (!SetProcessAffinityMask(process, mask)) {
+            mexErrMsgIdAndTxt("cpuBench:setAffinityFailed",
+                "SetProcessAffinityMask failed for P-core mode.");
+        }
+        if (!SetProcessDefaultCpuSets(process, selectedIds->data(),
+                static_cast<ULONG>(selectedIds->size()))) {
+            mexErrMsgIdAndTxt("cpuBench:setCpuSetsFailed",
+                "SetProcessDefaultCpuSets failed for P-core mode.");
+        }
+    }
+
+    const char* names[] = {
+        "supported", "mode", "message", "minEfficiencyClass", "maxEfficiencyClass",
+        "logicalProcessors", "efficiencyClasses", "pLogicalProcessors",
+        "selectedLogicalProcessors", "selectedLogicalCount", "recommendedThreads"
+    };
+    mxArray* s = mxCreateStructMatrix(1, 1, 11, names);
+    mxSetField(s, 0, "supported", mxCreateLogicalScalar(true));
+    mxSetField(s, 0, "mode", mxCreateString(selectedMode.c_str()));
+    mxSetField(s, 0, "message", mxCreateString(message.c_str()));
+    mxSetField(s, 0, "minEfficiencyClass", mxCreateDoubleScalar(minEfficiency));
+    mxSetField(s, 0, "maxEfficiencyClass", mxCreateDoubleScalar(maxEfficiency));
+    mxSetField(s, 0, "logicalProcessors", makeDoubleVector(logicalProcessors));
+    mxSetField(s, 0, "efficiencyClasses", makeDoubleVector(efficiencyClasses));
+    mxSetField(s, 0, "pLogicalProcessors", makeDoubleVector(pLogicalProcessors));
+    mxSetField(s, 0, "selectedLogicalProcessors", makeDoubleVector(*selectedLogical));
+    mxSetField(s, 0, "selectedLogicalCount",
+        mxCreateDoubleScalar(static_cast<double>(selectedLogical->size())));
+    mxSetField(s, 0, "recommendedThreads",
+        mxCreateDoubleScalar(static_cast<double>(selectedLogical->size())));
+    return s;
+}
+#else
+mxArray* setWindowsCpuMode(const std::string& mode)
+{
+    if (mode == "p" || mode == "pcore" || mode == "pcores") {
+        mexErrMsgIdAndTxt("cpuBench:cpuModeUnsupported",
+            "P-core mode is currently implemented for Windows CPU Sets only.");
+    }
+
+    const int threads = hardwareConcurrency();
+    const char* names[] = {
+        "supported", "mode", "message", "selectedLogicalCount", "recommendedThreads"
+    };
+    mxArray* s = mxCreateStructMatrix(1, 1, 5, names);
+    mxSetField(s, 0, "supported", mxCreateLogicalScalar(false));
+    mxSetField(s, 0, "mode", mxCreateString("all"));
+    mxSetField(s, 0, "message",
+        mxCreateString("CPU mode affinity is not implemented on this platform; using all cores."));
+    mxSetField(s, 0, "selectedLogicalCount", mxCreateDoubleScalar(threads));
+    mxSetField(s, 0, "recommendedThreads", mxCreateDoubleScalar(threads));
+    return s;
+}
+#endif
 
 int scalarToInt(const mxArray* value, const char* name)
 {
@@ -442,6 +655,18 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[])
         if (command == "getThreads") {
             if (nlhs > 0) {
                 plhs[0] = makeThreadStatus();
+            }
+            return;
+        }
+        if (command == "setCpuMode") {
+            if (nrhs != 2) {
+                mexErrMsgIdAndTxt("cpuBench:setCpuMode",
+                    "setCpuMode requires one mode: 'pcores', 'pe', 'amd', or 'all'.");
+            }
+            if (nlhs > 0) {
+                plhs[0] = setWindowsCpuMode(mxString(prhs[1]));
+            } else {
+                mxDestroyArray(setWindowsCpuMode(mxString(prhs[1])));
             }
             return;
         }

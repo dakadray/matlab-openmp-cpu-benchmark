@@ -45,10 +45,17 @@ mex -setup C++
 runCpuBenchmark_Y9000P
 ```
 
-32 GB 租用服务器跑全部组，包括 32 GB-oriented `crazy`：
+32 GB 租用服务器跑全部组，包括 32 GB-oriented `crazy`。Intel 大小核机器可以分别跑 P-only 和 P+E：
 
 ```matlab
-runCpuBenchmark_Server
+runCpuBenchmark_Server_P   % Intel hybrid: P-core only
+runCpuBenchmark_Server_PE  % Intel hybrid: P-core + E-core
+```
+
+AMD 机器使用默认全部核心：
+
+```matlab
+runCpuBenchmark_Server_amd
 ```
 
 Y9000P 入口会依次运行：
@@ -57,13 +64,15 @@ Y9000P 入口会依次运行：
 smoke, quick, standard, stress
 ```
 
-Server 入口会依次运行：
+所有 Server 入口都会依次运行：
 
 ```text
 smoke, quick, standard, stress, crazy
 ```
 
-两个入口都固定每个规模重复 3 次。入口只保留 `runCpuBenchmark_Y9000P` 和 `runCpuBenchmark_Server`，避免误点跑错配置。
+所有入口都固定每个规模重复 3 次。服务器入口只保留 `runCpuBenchmark_Server_P`、`runCpuBenchmark_Server_PE` 和 `runCpuBenchmark_Server_amd`，避免误点跑错配置。
+
+`runCpuBenchmark_Server_P` 会在 Windows 上用 CPU Set `EfficiencyClass` 识别 Intel P-core，并把 MATLAB 进程限制到最高 `EfficiencyClass` 的逻辑处理器；如果系统不是可识别的 Intel 大小核平台，它会报错而不是静默跑全核。
 
 或直接指定：
 
@@ -132,7 +141,7 @@ benchmarkOpenMpCpu('Profile', 'standard', 'Threads', 'all')
 | `48 x 48 x 48` | 110,592 | 352,947 | 345,744 | 63,700,992 |
 | `50 x 50 x 50` | 125,000 | 397,953 | 390,150 | 72,000,000 |
 
-`crazy` 默认只在 `runCpuBenchmark_Server` 中启用。
+`crazy` 默认只在服务器入口中启用。
 
 可选 profile:
 
@@ -165,7 +174,9 @@ runCpuBenchmark_Y9000P
 32 GB 租用服务器运行：
 
 ```matlab
-runCpuBenchmark_Server
+runCpuBenchmark_Server_P
+runCpuBenchmark_Server_PE
+runCpuBenchmark_Server_amd
 ```
 
 把三台机器的 `results/*_summary.csv` 放到同一个 `results` 目录后运行：
@@ -192,7 +203,9 @@ git clone https://github.com/dakadray/matlab-openmp-cpu-benchmark.git
 然后在 MATLAB 里进入仓库目录运行：
 
 ```matlab
-runCpuBenchmark_Server
+runCpuBenchmark_Server_PE   % Intel 大小核全开
+runCpuBenchmark_Server_P    % Intel 仅大核
+runCpuBenchmark_Server_amd  % AMD 全核
 ```
 
 ## 说明
