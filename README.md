@@ -102,10 +102,10 @@ benchmarkOpenMpCpu('Profile', 'standard', 'Threads', 'all')
 包含网格：
 
 ```text
-8x8x8, 12x12x12, 16x16x16, 20x20x20, 25x25x25, 30x30x30, 35x35x35, 40x40x40
+8x8x8, 12x12x12, 16x16x16, 20x20x20
 ```
 
-其中后四组是正式购买决策更有参考价值的大规模样本：
+`stress` profile 包含四组大规模样本，用于正式购买决策时单独压测：
 
 | 网格规模 | 单元数 | 全局自由度 | 求解自由度 | C++ 原始 triplet 数 |
 |---:|---:|---:|---:|---:|
@@ -129,8 +129,8 @@ benchmarkOpenMpCpu('Profile', 'stress', 'Threads', 'all')   % 更重，注意内
 
 ```matlab
 bench = benchmarkOpenMpCpu( ...
-    'Sizes', [8 8 8; 12 12 12; 16 16 16; 20 20 20; 25 25 25; ...
-        30 30 30; 35 35 35; 40 40 40], ...
+    'Sizes', [8 8 8; 12 12 12; 16 16 16; 20 20 20; ...
+        25 25 25; 30 30 30; 35 35 35; 40 40 40], ...
     'Repeats', 3, ...
     'Threads', 'all');
 ```
@@ -141,8 +141,13 @@ bench = benchmarkOpenMpCpu( ...
 
 ```matlab
 benchmarkOpenMpCpu('Profile', 'standard', 'Threads', 'all', 'SaveTag', '12900k')
+benchmarkOpenMpCpu('Profile', 'stress', 'Threads', 'all', 'SaveTag', '12900k')
+
 benchmarkOpenMpCpu('Profile', 'standard', 'Threads', 'all', 'SaveTag', 'u9_285k')
+benchmarkOpenMpCpu('Profile', 'stress', 'Threads', 'all', 'SaveTag', 'u9_285k')
+
 benchmarkOpenMpCpu('Profile', 'standard', 'Threads', 'all', 'SaveTag', '9950x')
+benchmarkOpenMpCpu('Profile', 'stress', 'Threads', 'all', 'SaveTag', '9950x')
 ```
 
 把三台机器的 `results/*_summary.csv` 放到同一个 `results` 目录后运行：
