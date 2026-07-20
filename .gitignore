@@ -1,0 +1,10 @@
+*.asv
+*.mex*
+*.obj
+*.o
+*.pdb
+*.ilk
+*.mat
+results/
+mex_build_info.json
+

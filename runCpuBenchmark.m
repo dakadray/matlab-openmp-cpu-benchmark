@@ -1,0 +1,9 @@
+% runCpuBenchmark Convenience entry point for rented or fresh machines.
+%
+% Edit the profile below if you want a shorter or heavier run.
+
+bench = benchmarkOpenMpCpu( ...
+    'Profile', 'standard', ...
+    'Threads', 'all', ...
+    'Repeats', []);
+
