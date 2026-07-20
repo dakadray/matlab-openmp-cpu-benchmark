@@ -63,7 +63,7 @@ Server 入口会依次运行：
 smoke, quick, standard, stress, crazy
 ```
 
-两个入口都固定每个规模重复 3 次。`runCpuBenchmark` 目前是本地安全默认入口，内部调用 `runCpuBenchmark_Y9000P`。
+两个入口都固定每个规模重复 3 次。入口只保留 `runCpuBenchmark_Y9000P` 和 `runCpuBenchmark_Server`，避免误点跑错配置。
 
 或直接指定：
 
