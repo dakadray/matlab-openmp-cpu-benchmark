@@ -43,17 +43,13 @@ mex -setup C++
 runCpuBenchmark
 ```
 
-如果想在本机跑一轮完整本地参照，包括能把 CPU 拉满的大规模 `stress`，运行：
-
-```matlab
-runLocalReferenceBenchmark
-```
-
 这个脚本会依次运行：
 
 ```text
 smoke, quick, standard, stress
 ```
+
+`runLocalReferenceBenchmark` 目前保留为兼容旧命令的别名，内部直接调用 `runCpuBenchmark`。
 
 或直接指定：
 
