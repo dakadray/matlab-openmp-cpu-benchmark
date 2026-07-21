@@ -39,11 +39,14 @@ mex -setup C++
 
 在 MATLAB 当前目录切到本项目根目录，然后按机器选择入口。
 
-本地 Y9000P 跑常规组，不跑 `crazy`：
+本地 Y9000P 跑常规组，不跑 `crazy`。可以分别跑 P-only 和全核：
 
 ```matlab
-runCpuBenchmark_Y9000P
+runCpuBenchmark_Y9000P_P    % Intel hybrid: P-core only
+runCpuBenchmark_Y9000P_all  % Intel P+E all-core
 ```
+
+旧入口 `runCpuBenchmark_Y9000P` 仍然可用，等价于 `runCpuBenchmark_Y9000P_all`。
 
 32 GB 租用服务器跑全部组，包括 32 GB-oriented `crazy`。Intel 大小核机器可以分别跑 P-only 和全核；AMD 机器直接跑全核：
 
@@ -64,9 +67,9 @@ smoke, quick, standard, stress
 smoke, quick, standard, stress, crazy
 ```
 
-所有入口都固定每个规模重复 3 次。服务器入口只保留 `runCpuBenchmark_Server_P` 和 `runCpuBenchmark_Server_all`，避免误点跑错配置。
+所有入口都固定每个规模重复 3 次。服务器入口只保留 `runCpuBenchmark_Server_P` 和 `runCpuBenchmark_Server_all`，本地入口保留 `runCpuBenchmark_Y9000P_P` 和 `runCpuBenchmark_Y9000P_all`；旧的 `runCpuBenchmark_Y9000P` 只是全核别名。
 
-`runCpuBenchmark_Server_P` 会在 Windows 上用 CPU Set `EfficiencyClass` 识别 Intel P-core，并把 MATLAB 进程限制到最高 `EfficiencyClass` 的逻辑处理器；如果系统不是可识别的 Intel 大小核平台，它会报错而不是静默跑全核。
+`runCpuBenchmark_Server_P` 和 `runCpuBenchmark_Y9000P_P` 会在 Windows 上用 CPU Set `EfficiencyClass` 识别 Intel P-core，并把 MATLAB 进程限制到最高 `EfficiencyClass` 的逻辑处理器；如果系统不是可识别的 Intel 大小核平台，它会报错而不是静默跑全核。
 
 如果 `runCpuBenchmark_Server_all` 显示的 `Selected logical processors` 明显少于任务管理器里的逻辑处理器数量，说明 MATLAB 进程仍被 Windows、租机平台或任务管理器 affinity 限制。先确认已经 `git pull` 到最新版本；如果最新版本仍然如此，需要在系统或平台层解除进程 affinity 限制。
 
@@ -166,7 +169,8 @@ bench = benchmarkOpenMpCpu( ...
 本地机器运行：
 
 ```matlab
-runCpuBenchmark_Y9000P
+runCpuBenchmark_Y9000P_P
+runCpuBenchmark_Y9000P_all
 ```
 
 32 GB 租用服务器运行：
