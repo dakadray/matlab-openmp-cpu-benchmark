@@ -3,9 +3,8 @@ function status = setCpuBenchmarkCpuMode(mode)
 %
 % Supported modes:
 %   pcores - Windows Intel hybrid CPUs: use highest EfficiencyClass CPUs.
-%   pe     - Use all active CPUs, intended for Intel P+E runs.
-%   amd    - Use all active CPUs, intended for AMD runs.
 %   all    - Use all active CPUs.
+%   pe/amd - Compatibility aliases for all active CPUs.
 
     if nargin < 1 || isempty(mode)
         mode = 'all';
@@ -20,7 +19,7 @@ function status = setCpuBenchmarkCpuMode(mode)
             mexMode = mode;
         otherwise
             error('cpuBench:invalidCpuMode', ...
-                'CPU mode must be ''pcores'', ''pe'', ''amd'', or ''all''.');
+                'CPU mode must be ''pcores'', ''all'', ''pe'', or ''amd''.');
     end
 
     buildCpuBenchmarkMex();

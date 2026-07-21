@@ -45,17 +45,11 @@ mex -setup C++
 runCpuBenchmark_Y9000P
 ```
 
-32 GB 租用服务器跑全部组，包括 32 GB-oriented `crazy`。Intel 大小核机器可以分别跑 P-only 和 P+E：
+32 GB 租用服务器跑全部组，包括 32 GB-oriented `crazy`。Intel 大小核机器可以分别跑 P-only 和全核；AMD 机器直接跑全核：
 
 ```matlab
-runCpuBenchmark_Server_P   % Intel hybrid: P-core only
-runCpuBenchmark_Server_PE  % Intel hybrid: P-core + E-core
-```
-
-AMD 机器使用默认全部核心：
-
-```matlab
-runCpuBenchmark_Server_amd
+runCpuBenchmark_Server_P    % Intel hybrid: P-core only
+runCpuBenchmark_Server_all  % Intel P+E all-core, or AMD all-core
 ```
 
 Y9000P 入口会依次运行：
@@ -70,13 +64,13 @@ smoke, quick, standard, stress
 smoke, quick, standard, stress, crazy
 ```
 
-所有入口都固定每个规模重复 3 次。服务器入口只保留 `runCpuBenchmark_Server_P`、`runCpuBenchmark_Server_PE` 和 `runCpuBenchmark_Server_amd`，避免误点跑错配置。
+所有入口都固定每个规模重复 3 次。服务器入口只保留 `runCpuBenchmark_Server_P` 和 `runCpuBenchmark_Server_all`，避免误点跑错配置。
 
 `runCpuBenchmark_Server_P` 会在 Windows 上用 CPU Set `EfficiencyClass` 识别 Intel P-core，并把 MATLAB 进程限制到最高 `EfficiencyClass` 的逻辑处理器；如果系统不是可识别的 Intel 大小核平台，它会报错而不是静默跑全核。
 
-如果 `runCpuBenchmark_Server_PE` 显示的 `Selected logical processors` 只有类似 `[16 17 18 19 20 21 22 23]` 这一段，说明 MATLAB 进程仍被 Windows、租机平台或任务管理器 affinity 限制在 E-core 上。先确认已经 `git pull` 到最新版本；如果最新版本仍然如此，需要在系统或平台层解除进程 affinity 限制。
+如果 `runCpuBenchmark_Server_all` 显示的 `Selected logical processors` 明显少于任务管理器里的逻辑处理器数量，说明 MATLAB 进程仍被 Windows、租机平台或任务管理器 affinity 限制。先确认已经 `git pull` 到最新版本；如果最新版本仍然如此，需要在系统或平台层解除进程 affinity 限制。
 
-Windows 可能把空闲 P-core 标记为 parked。benchmark 会把 parked processors 也纳入 P/PE 选择，并在 `parkedFlags`、`pParkedFlags` 中返回诊断信息；否则会错误地只测到当前未停放的那一小部分核心。
+Windows 可能把空闲 P-core 标记为 parked。benchmark 会把 parked processors 也纳入 P-only/全核选择，并在 `parkedFlags`、`pParkedFlags` 中返回诊断信息；否则会错误地只测到当前未停放的那一小部分核心。
 
 或直接指定：
 
@@ -179,8 +173,7 @@ runCpuBenchmark_Y9000P
 
 ```matlab
 runCpuBenchmark_Server_P
-runCpuBenchmark_Server_PE
-runCpuBenchmark_Server_amd
+runCpuBenchmark_Server_all
 ```
 
 把三台机器的 `results/*_summary.csv` 放到同一个 `results` 目录后运行：
@@ -207,9 +200,8 @@ git clone https://github.com/dakadray/matlab-openmp-cpu-benchmark.git
 然后在 MATLAB 里进入仓库目录运行：
 
 ```matlab
-runCpuBenchmark_Server_PE   % Intel 大小核全开
 runCpuBenchmark_Server_P    % Intel 仅大核
-runCpuBenchmark_Server_amd  % AMD 全核
+runCpuBenchmark_Server_all  % Intel 大小核全开 / AMD 全核
 ```
 
 ## 说明
