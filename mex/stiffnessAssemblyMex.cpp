@@ -103,7 +103,7 @@ struct CpuSetRecord {
 std::vector<CpuSetRecord> queryWindowsCpuSets()
 {
     DWORD bytesNeeded = 0;
-    GetSystemCpuSetInformation(nullptr, 0, &bytesNeeded, GetCurrentProcess(), 0);
+    GetSystemCpuSetInformation(nullptr, 0, &bytesNeeded, nullptr, 0);
     if (bytesNeeded == 0) {
         mexErrMsgIdAndTxt("cpuBench:cpuSetsUnavailable",
             "Windows CPU Set information is unavailable on this system.");
@@ -112,7 +112,7 @@ std::vector<CpuSetRecord> queryWindowsCpuSets()
     std::vector<char> buffer(bytesNeeded);
     if (!GetSystemCpuSetInformation(
             reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(buffer.data()),
-            bytesNeeded, &bytesNeeded, GetCurrentProcess(), 0)) {
+            bytesNeeded, &bytesNeeded, nullptr, 0)) {
         mexErrMsgIdAndTxt("cpuBench:cpuSetsUnavailable",
             "GetSystemCpuSetInformation failed.");
     }
@@ -142,6 +142,22 @@ std::vector<CpuSetRecord> queryWindowsCpuSets()
             "No Windows CPU Set records were returned.");
     }
     return records;
+}
+
+bool restoreProcessCpuSelection()
+{
+    HANDLE process = GetCurrentProcess();
+    SetProcessDefaultCpuSets(process, nullptr, 0);
+
+    DWORD_PTR processMask = 0;
+    DWORD_PTR systemMask = 0;
+    if (!GetProcessAffinityMask(process, &processMask, &systemMask)) {
+        return false;
+    }
+    if (systemMask == 0) {
+        return false;
+    }
+    return SetProcessAffinityMask(process, systemMask) != 0;
 }
 
 mxArray* makeDoubleVector(const std::vector<double>& values)
@@ -200,6 +216,7 @@ DWORD_PTR logicalProcessorMask(const std::vector<double>& logicalProcessors)
 
 mxArray* setWindowsCpuMode(const std::string& mode)
 {
+    const bool restoreBeforeQuery = restoreProcessCpuSelection();
     std::vector<CpuSetRecord> records = queryWindowsCpuSets();
     std::vector<DWORD> allIds;
     std::vector<DWORD> pIds;
@@ -236,12 +253,10 @@ mxArray* setWindowsCpuMode(const std::string& mode)
 
     HANDLE process = GetCurrentProcess();
     if (selectedMode == "all") {
-        DWORD_PTR processMask = 0;
-        DWORD_PTR systemMask = 0;
-        if (GetProcessAffinityMask(process, &processMask, &systemMask)) {
-            SetProcessAffinityMask(process, systemMask);
+        if (!restoreProcessCpuSelection()) {
+            mexErrMsgIdAndTxt("cpuBench:restoreAffinityFailed",
+                "Could not restore the MATLAB process to all system processors.");
         }
-        SetProcessDefaultCpuSets(process, nullptr, 0);
     } else {
         const DWORD_PTR mask = logicalProcessorMask(*selectedLogical);
         if (!SetProcessAffinityMask(process, mask)) {
@@ -258,9 +273,10 @@ mxArray* setWindowsCpuMode(const std::string& mode)
     const char* names[] = {
         "supported", "mode", "message", "minEfficiencyClass", "maxEfficiencyClass",
         "logicalProcessors", "efficiencyClasses", "pLogicalProcessors",
-        "selectedLogicalProcessors", "selectedLogicalCount", "recommendedThreads"
+        "selectedLogicalProcessors", "selectedLogicalCount", "recommendedThreads",
+        "restoreBeforeQuery"
     };
-    mxArray* s = mxCreateStructMatrix(1, 1, 11, names);
+    mxArray* s = mxCreateStructMatrix(1, 1, 12, names);
     mxSetField(s, 0, "supported", mxCreateLogicalScalar(true));
     mxSetField(s, 0, "mode", mxCreateString(selectedMode.c_str()));
     mxSetField(s, 0, "message", mxCreateString(message.c_str()));
@@ -274,6 +290,7 @@ mxArray* setWindowsCpuMode(const std::string& mode)
         mxCreateDoubleScalar(static_cast<double>(selectedLogical->size())));
     mxSetField(s, 0, "recommendedThreads",
         mxCreateDoubleScalar(static_cast<double>(selectedLogical->size())));
+    mxSetField(s, 0, "restoreBeforeQuery", mxCreateLogicalScalar(restoreBeforeQuery));
     return s;
 }
 #else

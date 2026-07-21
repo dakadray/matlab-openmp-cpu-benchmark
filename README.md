@@ -74,6 +74,8 @@ smoke, quick, standard, stress, crazy
 
 `runCpuBenchmark_Server_P` 会在 Windows 上用 CPU Set `EfficiencyClass` 识别 Intel P-core，并把 MATLAB 进程限制到最高 `EfficiencyClass` 的逻辑处理器；如果系统不是可识别的 Intel 大小核平台，它会报错而不是静默跑全核。
 
+如果 `runCpuBenchmark_Server_PE` 显示的 `Selected logical processors` 只有类似 `[16 17 18 19 20 21 22 23]` 这一段，说明 MATLAB 进程仍被 Windows、租机平台或任务管理器 affinity 限制在 E-core 上。先确认已经 `git pull` 到最新版本；如果最新版本仍然如此，需要在系统或平台层解除进程 affinity 限制。
+
 或直接指定：
 
 ```matlab
