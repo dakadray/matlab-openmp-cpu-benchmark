@@ -76,6 +76,8 @@ smoke, quick, standard, stress, crazy
 
 如果 `runCpuBenchmark_Server_PE` 显示的 `Selected logical processors` 只有类似 `[16 17 18 19 20 21 22 23]` 这一段，说明 MATLAB 进程仍被 Windows、租机平台或任务管理器 affinity 限制在 E-core 上。先确认已经 `git pull` 到最新版本；如果最新版本仍然如此，需要在系统或平台层解除进程 affinity 限制。
 
+Windows 可能把空闲 P-core 标记为 parked。benchmark 会把 parked processors 也纳入 P/PE 选择，并在 `parkedFlags`、`pParkedFlags` 中返回诊断信息；否则会错误地只测到当前未停放的那一小部分核心。
+
 或直接指定：
 
 ```matlab

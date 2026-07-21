@@ -173,29 +173,26 @@ mxArray* makeDoubleVector(const std::vector<double>& values)
 void splitCpuSets(const std::vector<CpuSetRecord>& records,
     std::vector<DWORD>& allIds, std::vector<DWORD>& pIds,
     std::vector<double>& logicalProcessors, std::vector<double>& pLogicalProcessors,
-    std::vector<double>& efficiencyClasses, int& minEfficiency, int& maxEfficiency)
+    std::vector<double>& efficiencyClasses, std::vector<double>& parkedFlags,
+    std::vector<double>& pParkedFlags, int& minEfficiency, int& maxEfficiency)
 {
     minEfficiency = 255;
     maxEfficiency = 0;
     for (const CpuSetRecord& rec : records) {
-        if (rec.parked) {
-            continue;
-        }
         const int eff = static_cast<int>(rec.efficiencyClass);
         minEfficiency = std::min(minEfficiency, eff);
         maxEfficiency = std::max(maxEfficiency, eff);
     }
 
     for (const CpuSetRecord& rec : records) {
-        if (rec.parked) {
-            continue;
-        }
         allIds.push_back(rec.id);
         logicalProcessors.push_back(static_cast<double>(rec.logicalProcessorIndex));
         efficiencyClasses.push_back(static_cast<double>(rec.efficiencyClass));
+        parkedFlags.push_back(rec.parked ? 1.0 : 0.0);
         if (static_cast<int>(rec.efficiencyClass) == maxEfficiency) {
             pIds.push_back(rec.id);
             pLogicalProcessors.push_back(static_cast<double>(rec.logicalProcessorIndex));
+            pParkedFlags.push_back(rec.parked ? 1.0 : 0.0);
         }
     }
 }
@@ -223,19 +220,21 @@ mxArray* setWindowsCpuMode(const std::string& mode)
     std::vector<double> logicalProcessors;
     std::vector<double> pLogicalProcessors;
     std::vector<double> efficiencyClasses;
+    std::vector<double> parkedFlags;
+    std::vector<double> pParkedFlags;
     int minEfficiency = 0;
     int maxEfficiency = 0;
     splitCpuSets(records, allIds, pIds, logicalProcessors, pLogicalProcessors,
-        efficiencyClasses, minEfficiency, maxEfficiency);
+        efficiencyClasses, parkedFlags, pParkedFlags, minEfficiency, maxEfficiency);
 
     if (allIds.empty()) {
-        mexErrMsgIdAndTxt("cpuBench:noActiveCpuSets", "No active CPU sets were found.");
+        mexErrMsgIdAndTxt("cpuBench:noCpuSets", "No CPU sets were found.");
     }
 
     std::vector<DWORD>* selectedIds = &allIds;
     std::vector<double>* selectedLogical = &logicalProcessors;
     std::string selectedMode = "all";
-    std::string message = "Using all active logical processors.";
+    std::string message = "Using all logical processors, including currently parked processors.";
 
     if (mode == "p" || mode == "pcore" || mode == "pcores") {
         if (maxEfficiency == minEfficiency || pIds.empty()) {
@@ -245,7 +244,7 @@ mxArray* setWindowsCpuMode(const std::string& mode)
         selectedIds = &pIds;
         selectedLogical = &pLogicalProcessors;
         selectedMode = "pcores";
-        message = "Using logical processors with the highest Windows EfficiencyClass.";
+        message = "Using logical processors with the highest Windows EfficiencyClass, including currently parked processors.";
     } else if (!(mode == "all" || mode == "pe" || mode == "amd")) {
         mexErrMsgIdAndTxt("cpuBench:invalidCpuMode",
             "CPU mode must be 'pcores', 'all', 'pe', or 'amd'.");
@@ -272,11 +271,11 @@ mxArray* setWindowsCpuMode(const std::string& mode)
 
     const char* names[] = {
         "supported", "mode", "message", "minEfficiencyClass", "maxEfficiencyClass",
-        "logicalProcessors", "efficiencyClasses", "pLogicalProcessors",
-        "selectedLogicalProcessors", "selectedLogicalCount", "recommendedThreads",
-        "restoreBeforeQuery"
+        "logicalProcessors", "efficiencyClasses", "parkedFlags",
+        "pLogicalProcessors", "pParkedFlags", "selectedLogicalProcessors",
+        "selectedLogicalCount", "recommendedThreads", "restoreBeforeQuery"
     };
-    mxArray* s = mxCreateStructMatrix(1, 1, 12, names);
+    mxArray* s = mxCreateStructMatrix(1, 1, 14, names);
     mxSetField(s, 0, "supported", mxCreateLogicalScalar(true));
     mxSetField(s, 0, "mode", mxCreateString(selectedMode.c_str()));
     mxSetField(s, 0, "message", mxCreateString(message.c_str()));
@@ -284,7 +283,9 @@ mxArray* setWindowsCpuMode(const std::string& mode)
     mxSetField(s, 0, "maxEfficiencyClass", mxCreateDoubleScalar(maxEfficiency));
     mxSetField(s, 0, "logicalProcessors", makeDoubleVector(logicalProcessors));
     mxSetField(s, 0, "efficiencyClasses", makeDoubleVector(efficiencyClasses));
+    mxSetField(s, 0, "parkedFlags", makeDoubleVector(parkedFlags));
     mxSetField(s, 0, "pLogicalProcessors", makeDoubleVector(pLogicalProcessors));
+    mxSetField(s, 0, "pParkedFlags", makeDoubleVector(pParkedFlags));
     mxSetField(s, 0, "selectedLogicalProcessors", makeDoubleVector(*selectedLogical));
     mxSetField(s, 0, "selectedLogicalCount",
         mxCreateDoubleScalar(static_cast<double>(selectedLogical->size())));
